@@ -26,6 +26,10 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 
+#include <errno.h>
+
+extern char **environ; /* defined by libc */
+
 #define ISspace(x) isspace((int)(x))
 
 #define SERVER_STRING "Server: jdbhttpd/0.1.0\r\n"
@@ -40,8 +44,46 @@ int get_line(int, char *, int);
 void headers(int, const char *);
 void not_found(int);
 void serve_file(int, const char *);
+void serve_file_mine(int client, const char *filename);
 int startup(u_short *);
 void unimplemented(int);
+
+
+int Dup2(int fd1, int fd2) 
+{
+    int rc;
+
+    if ((rc = dup2(fd1, fd2)) < 0)
+    {
+	    unix_error("Dup2 error");
+    }
+    return rc;
+}
+
+void unix_error(char *msg) /* unix-style error */
+{
+    fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+    //exit(0);
+}
+
+void Execve(const char *filename, char *const argv[], char *const envp[]) 
+{
+    if (execve(filename, argv, envp) < 0)
+    {
+        //syslog(LOG_CRIT,"Execve  error");
+	    unix_error("Execve error");
+    }
+}
+
+pid_t Fork(void) 
+{
+    pid_t pid;
+    if ((pid = fork()) < 0)
+    {
+	    unix_error("Fork error");
+    }
+    return pid;
+}
 
 /**********************************************************************/
 /* A request has caused a call to accept() on the server port to
@@ -116,8 +158,7 @@ void accept_request(int client)
  {
   if ((st.st_mode & S_IFMT) == S_IFDIR)
    strcat(path, "/index.html");
-
-#if 0
+  #if 0
   if ((st.st_mode & S_IXUSR) ||
       (st.st_mode & S_IXGRP) ||
       (st.st_mode & S_IXOTH)    )
@@ -129,7 +170,8 @@ void accept_request(int client)
   cgi = 0;
 
   if (!cgi)
-   serve_file(client, path);
+   //serve_file(client, path);
+   serve_file_mine(client, path);
   else
    execute_cgi(client, path, method, query_string);
  }
@@ -215,7 +257,7 @@ void execute_cgi(int client, const char *path,
                  const char *method, const char *query_string)
 {
 
- printf("path = %s, method = %s, query_string = %s\n", path, method, query_string);
+ printf("[execute_cgi] : path = %s, method = %s, query_string = %s\n", path, method, query_string);
 
  char buf[1024];
  int cgi_output[2];
@@ -422,6 +464,35 @@ void serve_file(int client, const char *filename)
   cat(client, resource);
  }
  fclose(resource);
+}
+
+
+void serve_file_mine(int client, const char *filename)
+{
+    printf("[serve_file_mine] : filename = %s\n", filename);
+
+    int numchars = 1;
+    char buf[1024];
+
+    buf[0] = 'A'; buf[1] = '\0';
+    while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
+    numchars = get_line(client, buf, sizeof(buf));
+
+    //char *emptylist[] = { NULL };
+    char * argv[ ]={"argv1","argv2","argv3",(char *)0};
+    //char * envp[ ]={"PATH=/usr/sbin",0};
+
+	if (Fork() == 0) 
+	{ /* child */
+        //setenv("CONTENT_LENGTH", "123", 1);
+        char length_env[255] = {0};
+        sprintf(length_env, "CONTENT_LENGTH=%d", 3);
+        putenv(length_env);
+        
+        Dup2(client, STDOUT_FILENO);         /* Redirect stdout to client */        
+        Execve("/usr/sbin/cgi_mine", argv, environ); /* Run CGI program */
+    }
+    
 }
 
 /**********************************************************************/
