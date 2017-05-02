@@ -44,7 +44,7 @@ int get_line(int, char *, int);
 void headers(int, const char *);
 void not_found(int);
 void serve_file(int, const char *);
-void serve_file_mine(int client, const char *filename);
+void get_dynamic(int client, const char *filename);
 int startup(u_short *);
 void unimplemented(int);
 
@@ -171,7 +171,7 @@ void accept_request(int client)
 
   if (!cgi)
    //serve_file(client, path);
-   serve_file_mine(client, path);
+   get_dynamic(client, path);
   else
    execute_cgi(client, path, method, query_string);
  }
@@ -467,9 +467,9 @@ void serve_file(int client, const char *filename)
 }
 
 
-void serve_file_mine(int client, const char *filename)
+void get_dynamic(int client, const char *filename)
 {
-    printf("[serve_file_mine] : filename = %s\n", filename);
+    printf("[get_dynamic] : filename = %s\n", filename);
 
     int numchars = 1;
     char buf[1024];
