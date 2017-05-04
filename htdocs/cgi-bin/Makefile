@@ -1,10 +1,13 @@
 CC = mipsel-openwrt-linux-gcc
 CFLAGS = -O2 -Wall -I ..
 
-all: cgi_mine 
+all: cgiget_mine cgipost_mine 
 
-cgi_mine: cgiMine.c
-	$(CC) $(CFLAGS) -o cgi_mine cgiMine.c
+cgiget_mine: cgiGetMine.c
+	$(CC) $(CFLAGS) -o cgiget_mine cgiGetMine.c
+
+cgipost_mine: cgiPostMine.c
+	$(CC) $(CFLAGS) -o cgipost_mine cgiPostMine.c
 
 clean:
-	rm -f cgi_mine *~
+	rm -f cgiget_mine cgipost_mine *~

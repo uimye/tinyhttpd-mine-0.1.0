@@ -247,6 +247,33 @@ void error_die(const char *sc)
  exit(1);
 }
 
+ssize_t rio_writen(int fd, void *usrbuf, size_t n) 
+{
+    size_t nleft = n;
+    ssize_t nwritten;
+    char *bufp = usrbuf;
+
+    while (nleft > 0) {
+	if ((nwritten = write(fd, bufp, nleft)) <= 0) {
+	    if (errno == EINTR)  /* interrupted by sig handler return */
+		nwritten = 0;    /* and call write() again */
+	    else
+		return -1;       /* errorno set by write() */
+	}
+	nleft -= nwritten;
+	bufp += nwritten;
+    }
+    return n;
+}
+
+void Rio_writen(int fd, void *usrbuf, size_t n) 
+{
+    if (rio_writen(fd, usrbuf, n) != n)
+    {
+	    unix_error("Rio_writen error");
+    }
+}
+
 /**********************************************************************/
 /* Execute a CGI script.  Will need to set environment variables as
  * appropriate.
@@ -293,115 +320,58 @@ void execute_cgi(int client, const char *path,
   }
  }
 
- sprintf(buf, "HTTP/1.0 200 OK\r\n");
- //send(client, buf, strlen(buf), 0);
+    int p[2];
+    
+    if (pipe(p) < 0)
+    {
+        cannot_execute(client);
+        return;
+    }
 
- #if 0
- if (pipe(cgi_output) < 0) {
-  cannot_execute(client);
-  return;
- }
- #endif
- //#if 0
- if (pipe(cgi_input) < 0) {
-  cannot_execute(client);
-  return;
- }
- //#endif
+    if ((pid = Fork()) == 0)
+	{                     /* child  */ 
+        /* Send response headers to client */
+        //sprintf(buf, "HTTP/1.0 200 OK\r\n");
+        //sprintf(buf, "%sServer: Tiny Web Server\r\n",buf);
 
- if ( (pid = fork()) < 0 ) {
-  cannot_execute(client);
-  return;
- }
- if (pid == 0)  /* child: CGI script */
- {
-    printf("child : CGI script\n");
-  char meth_env[255];
-  char query_env[255];
-  char length_env[255];
+        //Rio_writen(client, buf, strlen(buf));
 
-  #if 0
-  dup2(cgi_output[1], 1);
-  printf("1111111111111111\n");
-  dup2(cgi_input[0], 0);
-  printf("222222222222222\n");
-  close(cgi_output[0]);
-  printf("aaaaaaaaaaaaaaa\n");
-  close(cgi_input[1]);
-  sprintf(meth_env, "REQUEST_METHOD=%s", method);
-  printf("3333333333333\n");
-  putenv(meth_env);
-  printf("4444444444444444\n");
-  #endif
-  if (strcasecmp(method, "GET") == 0) {
-   sprintf(query_env, "QUERY_STRING=%s", query_string);
-   putenv(query_env);
-  }
-  else {   /* POST */
-   sprintf(length_env, "CONTENT_LENGTH=%d", content_length);
-   putenv(length_env);
-  }
-  printf("Begin to execl(path, path, NULL)\n");
+        //Wait(NULL);
+        Dup2(p[0], STDIN_FILENO);  /* Redirct p[0] to stdin */
+        close(p[0]);
 
-    char * argv[ ]={"argv1","argv2","argv3",(char *)0};
-
-	//if (Fork() == 0) 
-	//{ /* child */
-        //setenv("CONTENT_LENGTH", "123", 1);
+        close(p[1]);
+        //setenv("CONTENT-LENGTH", content_length , 1);
+        
+        char length_env[255];
         memset(length_env, 0, sizeof(length_env));
         sprintf(length_env, "CONTENT_LENGTH=%d", content_length);
         putenv(length_env);
+
+        char * argv[ ]={"argv1","argv2","argv3",(char *)0};
+    	Dup2(client, STDOUT_FILENO);        /* Redirct stdout to client */ 
+        Execve("/usr/sbin/cgipost_mine", argv, environ);  // Execve() must be in child pid
+        exit(0);
+	}
+
+	close(p[0]);
+	{
+        if (strcasecmp(method, "POST") == 0)
+        {
+            for (i = 0; i < content_length; i++)
+            {
+                recv(client, &c, 1, 0);
+                printf("%c", c);
+                write(p[1], &c, 1);
+            }
+        }
+        printf("\n");
         
-        Dup2(client, STDOUT_FILENO);         /* Redirect stdout to client */        
-        Execve("/usr/sbin/cgipost_mine", argv, environ); /* Run CGI program */
-    //}
-  
-  //execl(path, path, NULL);
-  exit(0);
- } else {    /* parent */
-
-  printf("[parent] : begin to recv ...\n");
-
-    Dup2(cgi_input[0], STDIN_FILENO);  /* Redirct cgi_input[0] to stdin */
-    close(cgi_input[0]);
-  
-  //#if 0
-  if (strcasecmp(method, "POST") == 0)
-   for (i = 0; i < content_length; i++) {
-    recv(client, &c, 1, 0);
-    printf("%c", c);
-    write(cgi_input[1], &c, 1);
-   }
-   close(cgi_input[1]);
-   printf("\n");
-
-   //#endif
+		//Rio_readnb(rp,data,contentLength);
+		//Rio_writen(p[1],data,contentLength);
+	}
+    waitpid(pid, &status, 0);
  
- #if 0
-  close(cgi_output[1]);
-  close(cgi_input[0]);
-  printf("=======>\n");
-  if (strcasecmp(method, "POST") == 0)
-   for (i = 0; i < content_length; i++) {
-    recv(client, &c, 1, 0);
-    printf("%c", c);
-    //write(cgi_input[1], &c, 1);
-   }
-   printf("\n");
-   printf("Begin to while read\n");
-  //while (read(cgi_output[0], &c, 1) > 0)
-   //send(client, &c, 1, 0);
-
-   printf("End to while read\n");
-
-  close(cgi_output[0]);
-  close(cgi_input[1]);
-  printf("Begin to waitpid\n");
-  waitpid(pid, &status, 0);
-  printf("End to waitpid\n");
-  #endif
-  waitpid(pid, &status, 0);
- }
 }
 
 /**********************************************************************/

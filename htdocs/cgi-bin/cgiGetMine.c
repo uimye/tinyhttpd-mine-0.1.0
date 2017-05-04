@@ -27,13 +27,13 @@ int main(int argc, char *argv[]) {
 
     //printf("length = %d\n", length);
 
-    sprintf(content, "%s\r\n", "<HTML>");
+    //sprintf(content, "%s\r\n", "<HTML>");
 
     printf("<HTML>\r\n");
     printf("<TITLE>Index</TITLE>\r\n");
     printf("<BODY>\r\n");
-    printf("<P>Welcome to J. David's webserver.\r\n");
-    printf("<H1>CGI_MINE demo\r\n");
+    printf("<P>Welcome to J. David's webserver. length= %d End\r\n", length);
+    printf("<H1>CGI_MINE demo \r\n");
     printf("<FORM ACTION=\"color.cgi\" METHOD=\"POST\">\r\n");
     printf("Enter a color: <INPUT TYPE=\"text\" NAME=\"color\">\r\n");
     printf("<INPUT TYPE=\"submit\">\r\n");
