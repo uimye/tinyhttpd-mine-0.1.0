@@ -167,7 +167,7 @@ void accept_request(int client)
 
   printf("cgi = %d\n", cgi);
 
-  cgi = 0;
+  //cgi = 0;
 
   if (!cgi)
    //serve_file(client, path);
@@ -276,12 +276,16 @@ void execute_cgi(int client, const char *path,
  else    /* POST */
  {
   numchars = get_line(client, buf, sizeof(buf));
-  while ((numchars > 0) && strcmp("\n", buf))
+  //printf("111[post] numchars = %d, buf = %s\n", numchars, buf);
+  while ((numchars > 0) && strcmp("\n", buf))  // judge whether the buf is the end line
   {
+    printf("\n");
    buf[15] = '\0';
    if (strcasecmp(buf, "Content-Length:") == 0)
     content_length = atoi(&(buf[16]));
+    //printf("content_length = %d\n", content_length);
    numchars = get_line(client, buf, sizeof(buf));
+   //printf("222[post] numchars = %d, buf = %s\n", numchars, buf);
   }
   if (content_length == -1) {
    bad_request(client);
@@ -290,16 +294,20 @@ void execute_cgi(int client, const char *path,
  }
 
  sprintf(buf, "HTTP/1.0 200 OK\r\n");
- send(client, buf, strlen(buf), 0);
+ //send(client, buf, strlen(buf), 0);
 
+ #if 0
  if (pipe(cgi_output) < 0) {
   cannot_execute(client);
   return;
  }
+ #endif
+ //#if 0
  if (pipe(cgi_input) < 0) {
   cannot_execute(client);
   return;
  }
+ //#endif
 
  if ( (pid = fork()) < 0 ) {
   cannot_execute(client);
@@ -307,16 +315,24 @@ void execute_cgi(int client, const char *path,
  }
  if (pid == 0)  /* child: CGI script */
  {
+    printf("child : CGI script\n");
   char meth_env[255];
   char query_env[255];
   char length_env[255];
 
+  #if 0
   dup2(cgi_output[1], 1);
+  printf("1111111111111111\n");
   dup2(cgi_input[0], 0);
+  printf("222222222222222\n");
   close(cgi_output[0]);
+  printf("aaaaaaaaaaaaaaa\n");
   close(cgi_input[1]);
   sprintf(meth_env, "REQUEST_METHOD=%s", method);
+  printf("3333333333333\n");
   putenv(meth_env);
+  printf("4444444444444444\n");
+  #endif
   if (strcasecmp(method, "GET") == 0) {
    sprintf(query_env, "QUERY_STRING=%s", query_string);
    putenv(query_env);
@@ -325,21 +341,65 @@ void execute_cgi(int client, const char *path,
    sprintf(length_env, "CONTENT_LENGTH=%d", content_length);
    putenv(length_env);
   }
-  execl(path, path, NULL);
+  printf("Begin to execl(path, path, NULL)\n");
+
+    char * argv[ ]={"argv1","argv2","argv3",(char *)0};
+
+	//if (Fork() == 0) 
+	//{ /* child */
+        //setenv("CONTENT_LENGTH", "123", 1);
+        memset(length_env, 0, sizeof(length_env));
+        sprintf(length_env, "CONTENT_LENGTH=%d", content_length);
+        putenv(length_env);
+        
+        Dup2(client, STDOUT_FILENO);         /* Redirect stdout to client */        
+        Execve("/usr/sbin/cgipost_mine", argv, environ); /* Run CGI program */
+    //}
+  
+  //execl(path, path, NULL);
   exit(0);
  } else {    /* parent */
-  close(cgi_output[1]);
-  close(cgi_input[0]);
+
+  printf("[parent] : begin to recv ...\n");
+
+    Dup2(cgi_input[0], STDIN_FILENO);  /* Redirct cgi_input[0] to stdin */
+    close(cgi_input[0]);
+  
+  //#if 0
   if (strcasecmp(method, "POST") == 0)
    for (i = 0; i < content_length; i++) {
     recv(client, &c, 1, 0);
+    printf("%c", c);
     write(cgi_input[1], &c, 1);
    }
-  while (read(cgi_output[0], &c, 1) > 0)
-   send(client, &c, 1, 0);
+   close(cgi_input[1]);
+   printf("\n");
+
+   //#endif
+ 
+ #if 0
+  close(cgi_output[1]);
+  close(cgi_input[0]);
+  printf("=======>\n");
+  if (strcasecmp(method, "POST") == 0)
+   for (i = 0; i < content_length; i++) {
+    recv(client, &c, 1, 0);
+    printf("%c", c);
+    //write(cgi_input[1], &c, 1);
+   }
+   printf("\n");
+   printf("Begin to while read\n");
+  //while (read(cgi_output[0], &c, 1) > 0)
+   //send(client, &c, 1, 0);
+
+   printf("End to while read\n");
 
   close(cgi_output[0]);
   close(cgi_input[1]);
+  printf("Begin to waitpid\n");
+  waitpid(pid, &status, 0);
+  printf("End to waitpid\n");
+  #endif
   waitpid(pid, &status, 0);
  }
 }
@@ -490,7 +550,7 @@ void get_dynamic(int client, const char *filename)
         putenv(length_env);
         
         Dup2(client, STDOUT_FILENO);         /* Redirect stdout to client */        
-        Execve("/usr/sbin/cgi_mine", argv, environ); /* Run CGI program */
+        Execve("/usr/sbin/cgiget_mine", argv, environ); /* Run CGI program */
     }
     
 }
